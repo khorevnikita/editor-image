@@ -31,21 +31,6 @@ export default class Tunes {
      */
     static get tunes() {
         return [
-            /* {
-               name: 'withBorder',
-               icon: borderIcon,
-               title: 'With border',
-             },
-             {
-               name: 'stretched',
-               icon: stretchedIcon,
-               title: 'Stretch image',
-             },
-             {
-               name: 'withBackground',
-               icon: bgIcon,
-               title: 'With background',
-             },*/
             {
                 name: 'align_left',
                 icon: alignLeft,

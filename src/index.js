@@ -75,370 +75,368 @@ import Uploader from './uploader';
  * @property {string} file.url - [Required] image source URL
  */
 export default class ImageTool {
-  /**
-   * Notify core that read-only mode is supported
-   *
-   * @returns {boolean}
-   */
-  static get isReadOnlySupported() {
-    return true;
-  }
-
-  /**
-   * Get Tool toolbox settings
-   * icon - Tool icon's SVG
-   * title - title to show in toolbox
-   *
-   * @returns {{icon: string, title: string}}
-   */
-  static get toolbox() {
-    return {
-      icon: ToolboxIcon,
-      title: 'Image',
-    };
-  }
-
-  /**
-   * @param {object} tool - tool properties got from editor.js
-   * @param {ImageToolData} tool.data - previously saved data
-   * @param {ImageConfig} tool.config - user config for Tool
-   * @param {object} tool.api - Editor.js API
-   * @param {boolean} tool.readOnly - read-only mode flag
-   */
-  constructor({ data, config, api, readOnly }) {
-    this.api = api;
-    this.readOnly = readOnly;
+    /**
+     * Notify core that read-only mode is supported
+     *
+     * @returns {boolean}
+     */
+    static get isReadOnlySupported() {
+        return true;
+    }
 
     /**
-     * Tool's initial config
+     * Get Tool toolbox settings
+     * icon - Tool icon's SVG
+     * title - title to show in toolbox
+     *
+     * @returns {{icon: string, title: string}}
      */
-    this.config = {
-      endpoints: config.endpoints || '',
-      additionalRequestData: config.additionalRequestData || {},
-      additionalRequestHeaders: config.additionalRequestHeaders || {},
-      field: config.field || 'image',
-      types: config.types || 'image/*',
-      captionPlaceholder: this.api.i18n.t(config.captionPlaceholder || 'Caption'),
-      buttonContent: config.buttonContent || '',
-      uploader: config.uploader || undefined,
-      actions: config.actions || [],
-    };
+    static get toolbox() {
+        return {
+            icon: ToolboxIcon,
+            title: 'Image',
+        };
+    }
 
     /**
-     * Module for file uploading
+     * @param {object} tool - tool properties got from editor.js
+     * @param {ImageToolData} tool.data - previously saved data
+     * @param {ImageConfig} tool.config - user config for Tool
+     * @param {object} tool.api - Editor.js API
+     * @param {boolean} tool.readOnly - read-only mode flag
      */
-    this.uploader = new Uploader({
-      config: this.config,
-      onUpload: (response) => this.onUpload(response),
-      onError: (error) => this.uploadingFailed(error),
-    });
+    constructor({data, config, api, readOnly}) {
+        this.api = api;
+        this.readOnly = readOnly;
 
-    /**
-     * Module for working with UI
-     */
-    this.ui = new Ui({
-      api,
-      config: this.config,
-      onSelectFile: () => {
-        this.uploader.uploadSelectedFile({
-          onPreview: (src) => {
-            this.ui.showPreloader(src);
-          },
+        /**
+         * Tool's initial config
+         */
+        this.config = {
+            endpoints: config.endpoints || '',
+            additionalRequestData: config.additionalRequestData || {},
+            additionalRequestHeaders: config.additionalRequestHeaders || {},
+            field: config.field || 'image',
+            types: config.types || 'image/*',
+            captionPlaceholder: this.api.i18n.t(config.captionPlaceholder || 'Caption'),
+            buttonContent: config.buttonContent || '',
+            uploader: config.uploader || undefined,
+            actions: config.actions || [],
+        };
+
+        /**
+         * Module for file uploading
+         */
+        this.uploader = new Uploader({
+            config: this.config,
+            onUpload: (response) => this.onUpload(response),
+            onError: (error) => this.uploadingFailed(error),
         });
-      },
-      readOnly,
-    });
+
+        /**
+         * Module for working with UI
+         */
+        this.ui = new Ui({
+            api,
+            config: this.config,
+            onSelectFile: () => {
+                this.uploader.uploadSelectedFile({
+                    onPreview: (src) => {
+                        this.ui.showPreloader(src);
+                    },
+                });
+            },
+            readOnly,
+        });
+
+        /**
+         * Module for working with tunes
+         */
+        this.tunes = new Tunes({
+            api,
+            actions: this.config.actions,
+            onChange: (tuneName) => this.tuneToggled(tuneName),
+        });
+
+        /**
+         * Set saved state
+         */
+        this._data = {};
+        this.data = data;
+    }
 
     /**
-     * Module for working with tunes
+     * Renders Block content
+     *
+     * @public
+     *
+     * @returns {HTMLDivElement}
      */
-    this.tunes = new Tunes({
-      api,
-      actions: this.config.actions,
-      onChange: (tuneName) => this.tuneToggled(tuneName),
-    });
+    render() {
+        return this.ui.render(this.data);
+    }
 
     /**
-     * Set saved state
+     * Validate data: check if Image exists
+     *
+     * @param {ImageToolData} savedData — data received after saving
+     * @returns {boolean} false if saved data is not correct, otherwise true
+     * @public
      */
-    this._data = {};
-    this.data = data;
-  }
+    validate(savedData) {
+        return savedData.file && savedData.file.url;
+    }
 
-  /**
-   * Renders Block content
-   *
-   * @public
-   *
-   * @returns {HTMLDivElement}
-   */
-  render() {
-    return this.ui.render(this.data);
-  }
+    /**
+     * Return Block data
+     *
+     * @public
+     *
+     * @returns {ImageToolData}
+     */
+    save() {
+        const caption = this.ui.nodes.caption;
 
-  /**
-   * Validate data: check if Image exists
-   *
-   * @param {ImageToolData} savedData — data received after saving
-   * @returns {boolean} false if saved data is not correct, otherwise true
-   * @public
-   */
-  validate(savedData) {
-    return savedData.file && savedData.file.url;
-  }
+        this._data.caption = caption.innerHTML;
 
-  /**
-   * Return Block data
-   *
-   * @public
-   *
-   * @returns {ImageToolData}
-   */
-  save() {
-    const caption = this.ui.nodes.caption;
+        return this.data;
+    }
 
-    this._data.caption = caption.innerHTML;
+    /**
+     * Makes buttons with tunes: add background, add border, stretch image
+     *
+     * @public
+     *
+     * @returns {Element}
+     */
+    renderSettings() {
+        return this.tunes.render(this.data);
+    }
 
-    return this.data;
-  }
+    /**
+     * Fires after clicks on the Toolbox Image Icon
+     * Initiates click on the Select File button
+     *
+     * @public
+     */
+    appendCallback() {
+        this.ui.nodes.fileButton.click();
+    }
 
-  /**
-   * Makes buttons with tunes: add background, add border, stretch image
-   *
-   * @public
-   *
-   * @returns {Element}
-   */
-  renderSettings() {
-    return this.tunes.render(this.data);
-  }
+    /**
+     * Specify paste substitutes
+     *
+     * @see {@link https://github.com/codex-team/editor.js/blob/master/docs/tools.md#paste-handling}
+     * @returns {{tags: string[], patterns: object<string, RegExp>, files: {extensions: string[], mimeTypes: string[]}}}
+     */
+    static get pasteConfig() {
+        return {
+            /**
+             * Paste HTML into Editor
+             */
+            tags: ['img'],
 
-  /**
-   * Fires after clicks on the Toolbox Image Icon
-   * Initiates click on the Select File button
-   *
-   * @public
-   */
-  appendCallback() {
-    this.ui.nodes.fileButton.click();
-  }
+            /**
+             * Paste URL of image into the Editor
+             */
+            patterns: {
+                image: /https?:\/\/\S+\.(gif|jpe?g|tiff|png)$/i,
+            },
 
-  /**
-   * Specify paste substitutes
-   *
-   * @see {@link https://github.com/codex-team/editor.js/blob/master/docs/tools.md#paste-handling}
-   * @returns {{tags: string[], patterns: object<string, RegExp>, files: {extensions: string[], mimeTypes: string[]}}}
-   */
-  static get pasteConfig() {
-    return {
-      /**
-       * Paste HTML into Editor
-       */
-      tags: [ 'img' ],
+            /**
+             * Drag n drop file from into the Editor
+             */
+            files: {
+                mimeTypes: ['image/*'],
+            },
+        };
+    }
 
-      /**
-       * Paste URL of image into the Editor
-       */
-      patterns: {
-        image: /https?:\/\/\S+\.(gif|jpe?g|tiff|png)$/i,
-      },
+    /**
+     * Specify paste handlers
+     *
+     * @public
+     * @see {@link https://github.com/codex-team/editor.js/blob/master/docs/tools.md#paste-handling}
+     * @param {CustomEvent} event - editor.js custom paste event
+     *                              {@link https://github.com/codex-team/editor.js/blob/master/types/tools/paste-events.d.ts}
+     * @returns {void}
+     */
+    async onPaste(event) {
+        switch (event.type) {
+            case 'tag': {
+                const image = event.detail.data;
 
-      /**
-       * Drag n drop file from into the Editor
-       */
-      files: {
-        mimeTypes: [ 'image/*' ],
-      },
-    };
-  }
+                /** Images from PDF */
+                if (/^blob:/.test(image.src)) {
+                    const response = await fetch(image.src);
+                    const file = await response.blob();
 
-  /**
-   * Specify paste handlers
-   *
-   * @public
-   * @see {@link https://github.com/codex-team/editor.js/blob/master/docs/tools.md#paste-handling}
-   * @param {CustomEvent} event - editor.js custom paste event
-   *                              {@link https://github.com/codex-team/editor.js/blob/master/types/tools/paste-events.d.ts}
-   * @returns {void}
-   */
-  async onPaste(event) {
-    switch (event.type) {
-      case 'tag': {
-        const image = event.detail.data;
+                    this.uploadFile(file);
+                    break;
+                }
 
-        /** Images from PDF */
-        if (/^blob:/.test(image.src)) {
-          const response = await fetch(image.src);
-          const file = await response.blob();
+                this.uploadUrl(image.src);
+                break;
+            }
+            case 'pattern': {
+                const url = event.detail.data;
 
-          this.uploadFile(file);
-          break;
+                this.uploadUrl(url);
+                break;
+            }
+            case 'file': {
+                const file = event.detail.file;
+
+                this.uploadFile(file);
+                break;
+            }
         }
-
-        this.uploadUrl(image.src);
-        break;
-      }
-      case 'pattern': {
-        const url = event.detail.data;
-
-        this.uploadUrl(url);
-        break;
-      }
-      case 'file': {
-        const file = event.detail.file;
-
-        this.uploadFile(file);
-        break;
-      }
     }
-  }
 
-  /**
-   * Private methods
-   * ̿̿ ̿̿ ̿̿ ̿'̿'\̵͇̿̿\з= ( ▀ ͜͞ʖ▀) =ε/̵͇̿̿/’̿’̿ ̿ ̿̿ ̿̿ ̿̿
-   */
+    /**
+     * Private methods
+     * ̿̿ ̿̿ ̿̿ ̿'̿'\̵͇̿̿\з= ( ▀ ͜͞ʖ▀) =ε/̵͇̿̿/’̿’̿ ̿ ̿̿ ̿̿ ̿̿
+     */
 
-  /**
-   * Stores all Tool's data
-   *
-   * @private
-   *
-   * @param {ImageToolData} data - data in Image Tool format
-   */
-  set data(data) {
-    this.image = data.file;
+    /**
+     * Stores all Tool's data
+     *
+     * @private
+     *
+     * @param {ImageToolData} data - data in Image Tool format
+     */
+    set data(data) {
+        this.image = data.file;
 
-    this._data.caption = data.caption || '';
-    this.ui.fillCaption(this._data.caption);
+        this._data.caption = data.caption || '';
+        this.ui.fillCaption(this._data.caption);
 
-    Tunes.tunes.forEach(({ name: tune }) => {
-      const value = typeof data[tune] !== 'undefined' ? data[tune] === true || data[tune] === 'true' : false;
+        Tunes.tunes.forEach(({name: tune}) => {
+            const value = typeof data[tune] !== 'undefined' ? data[tune] === true || data[tune] === 'true' : false;
 
-      this.setTune(tune, value);
-    });
-  }
-
-  /**
-   * Return Tool data
-   *
-   * @private
-   *
-   * @returns {ImageToolData}
-   */
-  get data() {
-    return this._data;
-  }
-
-  /**
-   * Set new image file
-   *
-   * @private
-   *
-   * @param {object} file - uploaded file data
-   */
-  set image(file) {
-    this._data.file = file || {};
-
-    if (file && file.url) {
-      this.ui.fillImage(file.url);
-    }
-  }
-
-  /**
-   * File uploading callback
-   *
-   * @private
-   *
-   * @param {UploadResponseFormat} response - uploading server response
-   * @returns {void}
-   */
-  onUpload(response) {
-    if (response.success && response.file) {
-      this.image = response.file;
-    } else {
-      this.uploadingFailed('incorrect response: ' + JSON.stringify(response));
-    }
-  }
-
-  /**
-   * Handle uploader errors
-   *
-   * @private
-   * @param {string} errorText - uploading error text
-   * @returns {void}
-   */
-  uploadingFailed(errorText) {
-    console.log('Image Tool: uploading failed because of', errorText);
-
-    this.api.notifier.show({
-      message: this.api.i18n.t('Couldn’t upload image. Please try another.'),
-      style: 'error',
-    });
-    this.ui.hidePreloader();
-  }
-
-  /**
-   * Callback fired when Block Tune is activated
-   *
-   * @private
-   *
-   * @param {string} tuneName - tune that has been clicked
-   * @returns {void}
-   */
-  tuneToggled(tuneName) {
-    // inverse tune state
-    this.setTune(tuneName, !this._data[tuneName]);
-  }
-
-  /**
-   * Set one tune
-   *
-   * @param {string} tuneName - {@link Tunes.tunes}
-   * @param {boolean} value - tune state
-   * @returns {void}
-   */
-  setTune(tuneName, value) {
-    this._data[tuneName] = value;
-
-    this.ui.applyTune(tuneName, value);
-
-    if (tuneName === 'stretched') {
-      /**
-       * Wait until the API is ready
-       */
-      Promise.resolve().then(() => {
-        const blockId = this.api.blocks.getCurrentBlockIndex();
-
-        this.api.blocks.stretchBlock(blockId, value);
-      })
-        .catch(err => {
-          console.error(err);
+            this.setTune(tune, value);
         });
     }
-  }
 
-  /**
-   * Show preloader and upload image file
-   *
-   * @param {File} file - file that is currently uploading (from paste)
-   * @returns {void}
-   */
-  uploadFile(file) {
-    this.uploader.uploadByFile(file, {
-      onPreview: (src) => {
-        this.ui.showPreloader(src);
-      },
-    });
-  }
+    /**
+     * Return Tool data
+     *
+     * @private
+     *
+     * @returns {ImageToolData}
+     */
+    get data() {
+        return this._data;
+    }
 
-  /**
-   * Show preloader and upload image by target url
-   *
-   * @param {string} url - url pasted
-   * @returns {void}
-   */
-  uploadUrl(url) {
-    this.ui.showPreloader(url);
-    this.uploader.uploadByUrl(url);
-  }
+    /**
+     * Set new image file
+     *
+     * @private
+     *
+     * @param {object} file - uploaded file data
+     */
+    set image(file) {
+        this._data.file = file || {};
+
+        if (file && file.url) {
+            this.ui.fillImage(file.url);
+        }
+    }
+
+    /**
+     * File uploading callback
+     *
+     * @private
+     *
+     * @param {UploadResponseFormat} response - uploading server response
+     * @returns {void}
+     */
+    onUpload(response) {
+        if (response.success && response.file) {
+            this.image = response.file;
+        } else {
+            this.uploadingFailed('incorrect response: ' + JSON.stringify(response));
+        }
+    }
+
+    /**
+     * Handle uploader errors
+     *
+     * @private
+     * @param {string} errorText - uploading error text
+     * @returns {void}
+     */
+    uploadingFailed(errorText) {
+        console.log('Image Tool: uploading failed because of', errorText);
+
+        this.api.notifier.show({
+            message: this.api.i18n.t('Couldn’t upload image. Please try another.'),
+            style: 'error',
+        });
+        this.ui.hidePreloader();
+    }
+
+    /**
+     * Callback fired when Block Tune is activated
+     *
+     * @private
+     *
+     * @param {string} tuneName - tune that has been clicked
+     * @returns {void}
+     */
+    tuneToggled(tuneName) {
+        // inverse tune state
+        this.setTune(tuneName, !this._data[tuneName]);
+    }
+
+    /**
+     * Set one tune
+     *
+     * @param {string} tuneName - {@link Tunes.tunes}
+     * @param {boolean} value - tune state
+     * @returns {void}
+     */
+    setTune(tuneName, value) {
+        this._data[tuneName] = value;
+
+        ['size', 'align'].forEach(key => {
+            if (tuneName.includes(key) && value) {
+                this.disableSimilar(tuneName, key);
+            }
+        })
+
+        this.ui.applyTune(tuneName, value);
+    }
+
+    disableSimilar(tuneName, key) {
+        Tunes.tunes.filter(tune => tune.name.includes(key) && tune.name !== tuneName).forEach(tune => {
+            this.setTune(tune.name, false);
+        })
+    }
+
+    /**
+     * Show preloader and upload image file
+     *
+     * @param {File} file - file that is currently uploading (from paste)
+     * @returns {void}
+     */
+    uploadFile(file) {
+        this.uploader.uploadByFile(file, {
+            onPreview: (src) => {
+                this.ui.showPreloader(src);
+            },
+        });
+    }
+
+    /**
+     * Show preloader and upload image by target url
+     *
+     * @param {string} url - url pasted
+     * @returns {void}
+     */
+    uploadUrl(url) {
+        this.ui.showPreloader(url);
+        this.uploader.uploadByUrl(url);
+    }
 }
